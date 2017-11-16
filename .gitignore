@@ -1,3 +1,4 @@
 client
 server
 time_test
+*.o
