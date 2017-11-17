@@ -1,18 +1,20 @@
 #include "sclock.h"
 #include <time.h>
 
-int real_hardware_clock_gettime(unsigned long long *result);
+int real_hardware_clock_gettime(microts *result);
 
 long software_clock_gettime(vhspec *v) {
 
 }
 
-long virtual_hardware_clock_gettime(vhspec *v) {
-
+/* Read the value of the virtual hardware clock.
+   The VHC's value is computed as the real time + drift since initialization. */
+int virtual_hardware_clock_gettime(vhspec *v) {
+    
 }
 
 int virtual_hardware_clock_init(vhspec *v) {
-    unsigned long long real_time;
+    microts real_time;
     if (real_hardware_clock_gettime(&real_time) != 0) {
         return -1;
     }
@@ -21,7 +23,7 @@ int virtual_hardware_clock_init(vhspec *v) {
     return 0;
 }
 
-int real_hardware_clock_gettime(unsigned long long *result) {
+int real_hardware_clock_gettime(microts *result) {
     struct timespec monotonic;
     if (clock_gettime(CLOCK_MONOTONIC_RAW, &monotonic) != 0) {
         return -1;
