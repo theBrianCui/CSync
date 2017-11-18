@@ -1,6 +1,8 @@
 #ifndef SCLOCK_H
 #define SCLOCK_H
 
+static const int MILLION = 1000000;
+
 /* Timestamp supporting microsecond precision.
    1 microts = 1 microsecond. */
 typedef unsigned long long microts;
@@ -14,7 +16,7 @@ typedef struct vhspec {
 } vhspec;
 
 long software_clock_gettime(vhspec *v);
-int virtual_hardware_clock_gettime(vhspec *v);
+int virtual_hardware_clock_gettime(vhspec *v, microts *result);
 int virtual_hardware_clock_init(vhspec *v);
 
 #endif // SCLOCK_H
