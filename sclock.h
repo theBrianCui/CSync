@@ -1,10 +1,16 @@
 #ifndef SCLOCK_H
 #define SCLOCK_H
 
+/* Timestamp supporting microsecond precision.
+   1 microts = 1 microsecond. */
 typedef unsigned long long microts;
+
 typedef struct vhspec {
-    microts initial_value; //in microseconds, e.g. 10^-6 of a second
-    double drift_rate;
+    microts initial_value;
+
+    /* drift_rate is given in parts per million, PPM.
+       +1 PPM = +1 microsecond of drift per second (1*10^6 microseconds) */
+    int drift_rate;
 } vhspec;
 
 long software_clock_gettime(vhspec *v);
