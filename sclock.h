@@ -7,6 +7,9 @@ static const int MILLION = 1000000;
    1 microts = 1 microsecond. */
 typedef unsigned long long microts;
 
+/* Specification for a hardware clock.
+   Initialize with a drift_rate and then calling
+   virtual_hardware_clock_init to assign the initial_value. */
 typedef struct vhspec {
     microts initial_value;
 
@@ -15,12 +18,17 @@ typedef struct vhspec {
     int drift_rate;
 } vhspec;
 
-/*typedef struct scspec {
+/* Specification for a software clock. */
+typedef struct scspec {
     microts amortization_period;
-    
-    };*/
+    //microts rapport;
+    microts rapport_master;
+    microts rapport_local;
+    microts rapport_vhc;
+    vhspec *vhclock;
+} scspec;
 
-    int software_clock_gettime(vhspec *v, microts *result);
+int software_clock_gettime(scspec *v, microts *result);
 int virtual_hardware_clock_gettime(vhspec *v, microts *result);
 int virtual_hardware_clock_init(vhspec *v);
 int real_hardware_clock_gettime(microts *result);

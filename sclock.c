@@ -2,12 +2,35 @@
 #include <time.h>
 #include <math.h>
 
-int software_clock_gettime(vhspec *v, microts *result) {
+int software_clock_gettime(scspec *s, microts *result) {
     microts vhc_time;
-    if (virtual_hardware_clock_gettime(v, &vhc_time) != 0)
+    if (virtual_hardware_clock_gettime(s->vhclock, &vhc_time) != 0)
         return -1;
 
-    *result = vhc_time;
+    double multiplier;
+    microts offset;
+
+    /* If amortization has complete, offset is N = L' - H'
+       where L' is the local time after amortization and
+       H' is the hardware clock value after amortization.
+       L' = M + a, H' = H + a */
+
+    if (s->rapport_vhc + s->amortization_period <= vhc_time) {
+        multiplier = 0.0;
+        offset = (s->rapport_master + s->amortization_period) -
+            (s->rapport_vhc + s->amortization_period);
+
+    } else {
+        // m = (M - L)/a
+        multiplier = ((double) (s->rapport_master - s->rapport_local)) /
+            ((double) s->amortization_period);
+
+        // N = L - (1 + m) * H
+        offset = llrint(s->rapport_local - ((1 + multiplier) * s->rapport_vhc));
+    }
+
+    // L = H * (1 + m) + N
+    *result = llrint(vhc_time * (1 + multiplier)) + offset;
     return 0;
 }
 
