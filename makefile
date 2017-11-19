@@ -17,7 +17,7 @@ server.o : server.c sclock.h
 	$(CC) $(CFLAGS) -c $<
 
 sclock.o : sclock.c
-	$(CC) $(CFLAGS) -c $<
+	$(CC) $(CFLAGS) -c $< -lm
 
 clean :
 	rm -f time_test client server ./*.o
