@@ -1,10 +1,14 @@
 #include "sclock.h"
 #include <time.h>
+#include <math.h>
 
-int real_hardware_clock_gettime(microts *result);
+int software_clock_gettime(vhspec *v, microts *result) {
+    microts vhc_time;
+    if (virtual_hardware_clock_gettime(v, &vhc_time) != 0)
+        return -1;
 
-long software_clock_gettime(vhspec *v) {
-
+    *result = vhc_time;
+    return 0;
 }
 
 /* Read the value of the virtual hardware clock.
@@ -16,8 +20,17 @@ int virtual_hardware_clock_gettime(vhspec *v, microts *result) {
         return -1;
 
     microts elapsed_time = (real_time) - (v->initial_value);
-    microts total_drift = (elapsed_time / MILLION) * (v->drift_rate);
-    *result = elapsed_time + total_drift;
+
+    /* compute whole_drift as drift expressed in whole numbers */
+    microts whole_drift = (elapsed_time / MILLION) * (v->drift_rate);
+
+    /* partial_drift is drift that occurs while a second has not fully elapsed.
+       To preserve VHC continuity, we have to account for drift that has occured
+       during the partial second that has elapsed. */
+    double fraction_of_second = ((double) (elapsed_time % MILLION)) / MILLION;
+    microts partial_drift = llrint(fraction_of_second * v->drift_rate);
+
+    *result = elapsed_time + (whole_drift + partial_drift);
     return 0;
 }
 

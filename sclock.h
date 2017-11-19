@@ -15,8 +15,14 @@ typedef struct vhspec {
     int drift_rate;
 } vhspec;
 
-long software_clock_gettime(vhspec *v);
+/*typedef struct scspec {
+    microts amortization_period;
+    
+    };*/
+
+    int software_clock_gettime(vhspec *v, microts *result);
 int virtual_hardware_clock_gettime(vhspec *v, microts *result);
 int virtual_hardware_clock_init(vhspec *v);
+int real_hardware_clock_gettime(microts *result);
 
 #endif // SCLOCK_H
