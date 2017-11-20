@@ -61,7 +61,7 @@ int main(int argc, char const *argv[]) {
 
         microts real_time;
         if (strncmp(query_string, buffer, MESSAGE_SIZE) == 0
-            && real_hardware_clock_gettime(&real_time)) {
+            && real_hardware_clock_gettime(&real_time) == 0) {
             
             sendto(server_fd, &real_time, MESSAGE_SIZE,
                    0, (struct sockaddr *) &client, slen);
