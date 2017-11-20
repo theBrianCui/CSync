@@ -4,7 +4,8 @@
 #include <netinet/in.h>
 #include <arpa/inet.h>
 #include <string.h>
-#include <errno.h>
+#include "sclock.h"
+#define MESSAGE_SIZE 8
 
 int main(int argc, char const *argv[]) {
     int server_fd, new_socket;
@@ -15,29 +16,21 @@ int main(int argc, char const *argv[]) {
     address.sin_port = htons(8080);
 
     int opt = 1;
-    char buffer[1024] = {0};
-    const char *PONG = "PONG";
+    char buffer[MESSAGE_SIZE] = {0};
+    const char *query_string = "time = ?";
 
     // Create socket file descriptor. 0 indicates failure.
     if ((server_fd = socket(AF_INET, SOCK_DGRAM, 0)) <= 0) {
         printf("Socket creation failed. Exiting.\n");
-        exit(1);
+        exit( 1);
     }
 
     // Allow reuse of local addresses and ports
     if (setsockopt(server_fd, SOL_SOCKET, SO_REUSEADDR | SO_REUSEPORT,
                    &opt, sizeof(opt))) {
-        printf("Socket option assignment failed. %s. Exiting.\n",
-               strerror(errno));
+        printf("Socket option assignment failed. Exiting.\n");
         exit(1);
     }
-
-    /* Listen to up to 5 connections at once. For use with TCP only.
-    if (listen(server_fd, 5) < 0) {
-        printf("Socket listening error. Exiting.\n");
-        exit(1);
-    }
-    */
 
     // Bind the socket to a port
     if (bind(server_fd, (struct sockaddr *) &address, sizeof(address)) < 0) {
@@ -48,13 +41,14 @@ int main(int argc, char const *argv[]) {
     struct sockaddr_in client;
     socklen_t slen = sizeof(client);
     while (1) {
+        memset(buffer, 0, MESSAGE_SIZE);
         printf("Waiting for data...\n");
         fflush(stdout);
 
         /* recvfrom is a blocking call. It stores sender information in `client`
            and the received datagram in `buffer` with size `recv_len`. */
         int recv_len;
-        if ((recv_len = recvfrom(server_fd, buffer, sizeof(buffer), 0,
+        if ((recv_len = recvfrom(server_fd, buffer, MESSAGE_SIZE, 0,
                                  (struct sockaddr *) &client, &slen)) < 0) {
             printf("recvfrom failed. Exiting.\n");
             exit(1);
@@ -65,9 +59,12 @@ int main(int argc, char const *argv[]) {
                ntohs(client.sin_port));
         printf("Data: %s, strlen(): %zu\n" , buffer, strlen(buffer));
 
-        /* if PING, reply PONG */
-        if (1 || strncmp(PONG, buffer, recv_len) == 0) {
-            sendto(server_fd, PONG, 4, 0, (struct sockaddr *) &client, slen);
+        microts real_time;
+        if (strncmp(query_string, buffer, MESSAGE_SIZE) == 0
+            && real_hardware_clock_gettime(&real_time)) {
+            
+            sendto(server_fd, &real_time, MESSAGE_SIZE,
+                   0, (struct sockaddr *) &client, slen);
         }
     }
 }
