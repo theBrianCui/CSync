@@ -49,7 +49,7 @@ int main(int argc, char *argv[])
 
         error = soft_clock_time - doubling_clock_time;
         if (current_real_time - last_print > 500000) {
-            printf("RT: %lld\tDCT: %lld\tFCT: %lld\tSCT: %lld\tE: %lld\n",
+            printf("RT: %ld\tDCT: %ld\tFCT: %ld\tSCT: %ld\tE: %ld\n",
                    current_real_time, doubling_clock_time,
                    fast_clock_time, soft_clock_time, error);
             last_print = current_real_time;

@@ -1,3 +1,4 @@
+#include <stdint.h>
 #ifndef SCLOCK_H
 #define SCLOCK_H
 
@@ -5,7 +6,7 @@ static const int MILLION = 1000000;
 
 /* Timestamp supporting microsecond precision.
    1 microts = 1 microsecond. */
-typedef unsigned long long microts;
+typedef uint64_t microts;
 
 /* Specification for a hardware clock.
    Initialize with a drift_rate and then calling
@@ -15,7 +16,7 @@ typedef struct vhspec {
 
     /* drift_rate is given in parts per million, PPM.
        +1 PPM = +1 microsecond of drift per second (1*10^6 microseconds) */
-    int drift_rate;
+    int32_t drift_rate;
 } vhspec;
 
 /* Specification for a software clock. */
