@@ -63,7 +63,7 @@ int main(int argc, char *argv[])
 
     struct timeval timeout;
     timeout.tv_sec = POLL_PERIOD / MILLION;
-    timeout.tv_sec = POLL_PERIOD % MILLION;
+    timeout.tv_usec = POLL_PERIOD % MILLION;
 
     if (setsockopt(sockfd, SOL_SOCKET, SO_RCVTIMEO,
                    &timeout, sizeof(timeout)) < 0) {
