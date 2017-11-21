@@ -22,7 +22,7 @@ int main(int argc, char const *argv[]) {
     // Create socket file descriptor. 0 indicates failure.
     if ((server_fd = socket(AF_INET, SOCK_DGRAM, 0)) <= 0) {
         printf("Socket creation failed. Exiting.\n");
-        exit( 1);
+        exit(1);
     }
 
     // Allow reuse of local addresses and ports
