@@ -48,6 +48,11 @@ int main(int argc, char *argv[])
     struct sockaddr_in serveraddr;
     char buffer[MESSAGE_SIZE];
 
+    if (argc < 3) {
+        printf("Usage: client [ip address] [port]\n");
+        exit(1);
+    }
+
     char *hostname = argv[1];
     int port = atoi(argv[2]);
 
@@ -64,7 +69,7 @@ int main(int argc, char *argv[])
                    &timeout, sizeof(timeout)) < 0) {
         printf("Socket option assignment failed. Exiting.\n");
     }
-    
+
     serveraddr.sin_family = AF_INET;
     inet_pton(AF_INET, hostname, &serveraddr.sin_addr);
     serveraddr.sin_port = htons(port);
@@ -80,7 +85,7 @@ int main(int argc, char *argv[])
         if (recv_len == MESSAGE_SIZE) {
             printf("Data received! %lu\n", *((uint64_t *) buffer));
         }
-        
+
         microts current_real_time, doubling_clock_time,
             fast_clock_time, soft_clock_time, error;
 
