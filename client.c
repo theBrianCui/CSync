@@ -2,7 +2,17 @@
 #include <time.h>
 #include <stdio.h>
 #include <string.h>
+#include <sys/types.h>
+#include <sys/socket.h>
+#include <netinet/in.h>
+#include <arpa/inet.h>
 #include "sclock.h"
+#define MESSAGE_SIZE 8
+
+/* Unless otherwise specified, constants are given in microseconds
+   (e.g. 1 * 10^6 microseconds = 1000000 = 1 second ) */
+#define POLL_PERIOD 500000
+#define RAPPORT_PERIOD 10000000
 
 int main(int argc, char *argv[])
 {
@@ -33,7 +43,44 @@ int main(int argc, char *argv[])
     }
     last_print = last_rapport;
 
+    int sockfd, n;
+    int serverlen;
+    struct sockaddr_in serveraddr;
+    char buffer[MESSAGE_SIZE];
+
+    char *hostname = argv[1];
+    int port = atoi(argv[2]);
+
+    if ((sockfd = socket(AF_INET, SOCK_DGRAM, 0)) < 0) {
+        printf("Socket creation failed. Exiting.\n");
+        exit(1);
+    }
+
+    struct timeval timeout;
+    timeout.tv_sec = POLL_PERIOD / MILLION;
+    timeout.tv_sec = POLL_PERIOD % MILLION;
+
+    if (setsockopt(sockfd, SOL_SOCKET, SO_RCVTIMEO,
+                   &timeout, sizeof(timeout)) < 0) {
+        printf("Socket option assignment failed. Exiting.\n");
+    }
+    
+    serveraddr.sin_family = AF_INET;
+    inet_pton(AF_INET, hostname, &serveraddr.sin_addr);
+    serveraddr.sin_port = htons(port);
+    serverlen = sizeof(serveraddr);
+
+    printf("Starting up...\n");
     while (1) {
+        printf("Waiting for data...\n");
+        int recv_len = recvfrom(sockfd, buffer, MESSAGE_SIZE, 0,
+                                (struct sockaddr *) &serveraddr, &serverlen);
+
+        printf("Not waiting anymore.\n");
+        if (recv_len == MESSAGE_SIZE) {
+            printf("Data received! %lu\n", *((uint64_t *) buffer));
+        }
+        
         microts current_real_time, doubling_clock_time,
             fast_clock_time, soft_clock_time, error;
 
@@ -48,14 +95,11 @@ int main(int argc, char *argv[])
         }
 
         error = soft_clock_time - doubling_clock_time;
-        if (current_real_time - last_print > 500000) {
-            printf("RT: %ld\tDCT: %ld\tFCT: %ld\tSCT: %ld\tE: %ld\n",
-                   current_real_time, doubling_clock_time,
-                   fast_clock_time, soft_clock_time, error);
-            last_print = current_real_time;
-        }
+        printf("RT: %ld\tDCT: %ld\tFCT: %ld\tSCT: %ld\tE: %ld\n",
+               current_real_time, doubling_clock_time,
+               fast_clock_time, soft_clock_time, error);
 
-        if (current_real_time - last_rapport > 10000000) {
+        if (current_real_time - last_rapport > RAPPORT_PERIOD) {
             printf("Performing rapport.\n");
             soft_clock.rapport_master = doubling_clock_time;
             soft_clock.rapport_local = soft_clock_time;
