@@ -77,6 +77,9 @@ int main(int argc, char *argv[])
 
     printf("Starting up...\n");
     while (1) {
+        printf("Sending a message...\n");
+        sendto(sockfd, QUERY_STRING, MESSAGE_SIZE, MSG_DONTWAIT,
+               (struct sockaddr *) &serveraddr, serverlen);
         printf("Waiting for data...\n");
         int recv_len = recvfrom(sockfd, buffer, MESSAGE_SIZE, 0,
                                 (struct sockaddr *) &serveraddr, &serverlen);

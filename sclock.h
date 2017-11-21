@@ -3,6 +3,7 @@
 #define SCLOCK_H
 
 static const int MILLION = 1000000;
+static const char *QUERY_STRING = "time = ?";
 
 /* Timestamp supporting microsecond precision.
    1 microts = 1 microsecond. */

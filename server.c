@@ -17,7 +17,6 @@ int main(int argc, char const *argv[]) {
 
     int opt = 1;
     char buffer[MESSAGE_SIZE] = {0};
-    const char *query_string = "time = ?";
 
     // Create socket file descriptor. 0 indicates failure.
     if ((server_fd = socket(AF_INET, SOCK_DGRAM, 0)) <= 0) {
@@ -60,7 +59,7 @@ int main(int argc, char const *argv[]) {
         printf("Data: %s, strlen(): %zu\n" , buffer, strlen(buffer));
 
         microts real_time;
-        if (strncmp(query_string, buffer, MESSAGE_SIZE) == 0
+        if (strncmp(QUERY_STRING, buffer, MESSAGE_SIZE) == 0
             && real_hardware_clock_gettime(&real_time) == 0) {
             
             sendto(server_fd, &real_time, MESSAGE_SIZE,
