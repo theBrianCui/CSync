@@ -5,7 +5,6 @@
 #include <arpa/inet.h>
 #include <string.h>
 #include "sclock.h"
-#define MESSAGE_SIZE 8
 
 int main(int argc, char const *argv[]) {
     int server_fd, new_socket;
@@ -56,14 +55,29 @@ int main(int argc, char const *argv[]) {
         printf("Packet received of length %d.\n", recv_len);
         printf("Received packet from %s:%d\n", inet_ntoa(client.sin_addr),
                ntohs(client.sin_port));
-        printf("Data: %s, strlen(): %zu\n" , buffer, strlen(buffer));
+
+        char return_buffer[MESSAGE_SIZE] = {0};
+
+        /* Read the sequence number from the incoming buffer. */
+        uint32_t sequence_number;
+        sequence_number = ntohl(*(uint32_t *) buffer);
+        printf("Received sequence number: %d\n", sequence_number);
 
         microts real_time;
-        if (strncmp(QUERY_STRING, buffer, MESSAGE_SIZE) == 0
+        if (strncmp(QUERY_STRING, buffer + SEQ_NUM_SIZE, PAYLOAD_SIZE) == 0
             && real_hardware_clock_gettime(&real_time) == 0) {
+
+            /* Increment sequence number */
+            *(uint32_t *) return_buffer = htonl(sequence_number + 1);
+
+            /* Attach real_time value */
+            *(uint64_t *) (return_buffer + SEQ_NUM_SIZE) = htonll(real_time);
+
+            printf("Sending: [%d] [%ld]\n", sequence_number + 1, real_time);
             
-            sendto(server_fd, &real_time, MESSAGE_SIZE,
+            sendto(server_fd, return_buffer, MESSAGE_SIZE,
                    0, (struct sockaddr *) &client, slen);
+
         }
     }
 }

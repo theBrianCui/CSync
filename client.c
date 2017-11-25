@@ -7,7 +7,6 @@
 #include <netinet/in.h>
 #include <arpa/inet.h>
 #include "sclock.h"
-#define MESSAGE_SIZE 8
 
 /* Unless otherwise specified, constants are given in microseconds
    (e.g. 1 * 10^6 microseconds = 1000000 = 1 second ) */
@@ -43,10 +42,9 @@ int main(int argc, char *argv[])
     }
     last_print = last_rapport;
 
-    int sockfd, n;
-    int serverlen;
+    int sockfd, serverlen;
     struct sockaddr_in serveraddr;
-    char buffer[MESSAGE_SIZE];
+    char buffer[MESSAGE_SIZE] = {0};
 
     if (argc < 3) {
         printf("Usage: client [ip address] [port]\n");
@@ -75,18 +73,38 @@ int main(int argc, char *argv[])
     serveraddr.sin_port = htons(port);
     serverlen = sizeof(serveraddr);
 
+    uint32_t next_seq_num = 0;
     printf("Starting up...\n");
     while (1) {
+        memset(buffer, 0, MESSAGE_SIZE);
+
         printf("Sending a message...\n");
-        sendto(sockfd, QUERY_STRING, MESSAGE_SIZE, MSG_DONTWAIT,
+
+        /* Construct message: [seq number] [query string] */
+        char request_buffer[MESSAGE_SIZE] = {0};
+
+        /* Assign and increment sequence number */
+        *(uint32_t *) request_buffer = htonl(next_seq_num++);
+
+        /* Insert query string */
+        strncpy(request_buffer + SEQ_NUM_SIZE, QUERY_STRING, PAYLOAD_SIZE);
+
+        sendto(sockfd, request_buffer, MESSAGE_SIZE, MSG_DONTWAIT,
                (struct sockaddr *) &serveraddr, serverlen);
+
+        /* Listen for incoming messages (will timeout) */
         printf("Waiting for data...\n");
         int recv_len = recvfrom(sockfd, buffer, MESSAGE_SIZE, 0,
                                 (struct sockaddr *) &serveraddr, &serverlen);
 
-        printf("Not waiting anymore.\n");
         if (recv_len == MESSAGE_SIZE) {
-            printf("Data received! %lu\n", *((uint64_t *) buffer));
+            uint32_t received_seq_num = ntohl(*(uint32_t *) buffer);
+            if (received_seq_num == next_seq_num) {
+                microts received_ts =
+                    ntohll(*(uint64_t *) (buffer + SEQ_NUM_SIZE));
+
+                printf("Received: [%d] [%ld]\n", received_seq_num, received_ts);
+            }
         }
 
         microts current_real_time, doubling_clock_time,
