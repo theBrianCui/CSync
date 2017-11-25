@@ -13,6 +13,28 @@
 #define POLL_PERIOD 500000
 #define RAPPORT_PERIOD 10000000
 
+int create_client_socket(int *fd, microts timeout_usec) {
+    /* Create a socket for sending / receiving requests to the server */
+    int client_fd;
+    if ((client_fd = socket(AF_INET, SOCK_DGRAM, 0)) < 0) {
+        printf("Client socket creation failed.\n");
+        return -1;
+    }
+
+    /* Assign a receive timeout as a function of the POLL_PERIOD */
+    struct timeval timeout;
+    timeout.tv_sec = timeout_usec / MILLION;
+    timeout.tv_usec = timeout_usec % MILLION;
+    if (setsockopt(client_fd, SOL_SOCKET, SO_RCVTIMEO,
+                   &timeout, sizeof(timeout)) < 0) {
+        printf("Client timeout assignment failed.\n");
+        return -1;
+    }
+
+    *fd = client_fd;
+    return 0;
+}
+
 int main(int argc, char *argv[])
 {
     vhspec doubling_clock;
@@ -42,20 +64,10 @@ int main(int argc, char *argv[])
     }
     last_print = last_rapport;
 
-    /* Create a socket for sending / receiving requests to the server */
     int client_fd;
-    if ((client_fd = socket(AF_INET, SOCK_DGRAM, 0)) < 0) {
-        printf("Socket creation failed. Exiting.\n");
+    if (create_client_socket(&client_fd, POLL_PERIOD) < 0) {
+        printf("Could not create client socket.\n");
         exit(1);
-    }
-
-    /* Assign a receive timeout as a function of the POLL_PERIOD */
-    struct timeval timeout;
-    timeout.tv_sec = POLL_PERIOD / MILLION;
-    timeout.tv_usec = POLL_PERIOD % MILLION;
-    if (setsockopt(client_fd, SOL_SOCKET, SO_RCVTIMEO,
-                   &timeout, sizeof(timeout)) < 0) {
-        printf("Socket option assignment failed. Exiting.\n");
     }
 
     /* Build the server address struct with IP, port */
