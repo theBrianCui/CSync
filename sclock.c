@@ -1,6 +1,7 @@
 #include "sclock.h"
 #include <time.h>
 #include <math.h>
+#include <stdio.h>
 
 int software_clock_gettime(scspec *s, microts *result) {
     microts vhc_time;
@@ -21,6 +22,9 @@ int software_clock_gettime(scspec *s, microts *result) {
             (s->rapport_vhc + s->amortization_period);
 
     } else {
+        printf("s->rapport_master: %ld, s->rapport_local: %ld, diff: %lf\n",
+               s->rapport_master, s->rapport_local,
+               (double) (s->rapport_master - s->rapport_local));
         // m = (M - L)/a
         multiplier = ((double) (s->rapport_master - s->rapport_local)) /
             ((double) s->amortization_period);
@@ -28,6 +32,8 @@ int software_clock_gettime(scspec *s, microts *result) {
         // N = L - (1 + m) * H
         offset = llrint(s->rapport_local - ((1 + multiplier) * s->rapport_vhc));
     }
+
+    printf("Multiplier: %lf, Offset: %ld\n", multiplier, offset);
 
     // L = H * (1 + m) + N
     *result = llrint(vhc_time * (1 + multiplier)) + offset;
@@ -53,7 +59,7 @@ int virtual_hardware_clock_gettime(vhspec *v, microts *result) {
     double fraction_of_second = ((double) (elapsed_time % MILLION)) / MILLION;
     microts partial_drift = llrint(fraction_of_second * v->drift_rate);
 
-    *result = elapsed_time + (whole_drift + partial_drift);
+    *result = elapsed_time + (whole_drift + partial_drift) + v->offset;
     return 0;
 }
 

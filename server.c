@@ -7,6 +7,18 @@
 #include "sclock.h"
 
 int main(int argc, char const *argv[]) {
+    if (argc < 2) {
+        printf("Usage: server [master drift (PPM)]\n");
+        exit(1);
+    }
+
+    vhspec server_clock;
+    server_clock.drift_rate = atoi(argv[1]);
+    if (virtual_hardware_clock_init(&server_clock) != 0) {
+        printf("An error occurred during virtual hardware clock initialization.\n");
+        exit(1);
+    }
+
     int server_fd, new_socket;
 
     struct sockaddr_in address;
@@ -63,17 +75,18 @@ int main(int argc, char const *argv[]) {
         sequence_number = ntohl(*(uint32_t *) buffer);
         printf("Received sequence number: %d\n", sequence_number);
 
-        microts real_time;
+        microts server_time;
         if (strncmp(QUERY_STRING, buffer + SEQ_NUM_SIZE, PAYLOAD_SIZE) == 0
-            && real_hardware_clock_gettime(&real_time) == 0) {
+            && virtual_hardware_clock_gettime(&server_clock, 
+                                              &server_time) == 0) {
 
             /* Increment sequence number */
             *(uint32_t *) return_buffer = htonl(sequence_number + 1);
 
             /* Attach real_time value */
-            *(uint64_t *) (return_buffer + SEQ_NUM_SIZE) = htonll(real_time);
+            *(uint64_t *) (return_buffer + SEQ_NUM_SIZE) = htonll(server_time);
 
-            printf("Sending: [%d] [%ld]\n", sequence_number + 1, real_time);
+            printf("Sending: [%d] [%ld]\n", sequence_number + 1, server_time);
             
             sendto(server_fd, return_buffer, MESSAGE_SIZE,
                    0, (struct sockaddr *) &client, slen);

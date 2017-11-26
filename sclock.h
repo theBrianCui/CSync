@@ -23,13 +23,14 @@ static const char *QUERY_STRING = "time = ?";
 
 /* Timestamp supporting microsecond precision.
    1 microts = 1 microsecond. */
-typedef uint64_t microts;
+typedef int64_t microts;
 
 /* Specification for a hardware clock.
    Initialize with a drift_rate and then calling
    virtual_hardware_clock_init to assign the initial_value. */
 typedef struct vhspec {
     microts initial_value;
+    microts offset;
 
     /* drift_rate is given in parts per million, PPM.
        +1 PPM = +1 microsecond of drift per second (1*10^6 microseconds) */
