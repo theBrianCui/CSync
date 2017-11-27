@@ -30,7 +30,14 @@ typedef int64_t microts;
    virtual_hardware_clock_init to assign the initial_value. */
 typedef struct vhspec {
     microts initial_value;
+
+    /* a hard offset that adjusts the final read value.
+       Used for synchronizing two vhclocks with the same drift. */
     microts offset;
+
+    /* a vhclock synced to another may have a small sync error
+       interpreted as timestamp +- error. Usually zero. */
+    microts error;
 
     /* drift_rate is given in parts per million, PPM.
        +1 PPM = +1 microsecond of drift per second (1*10^6 microseconds) */

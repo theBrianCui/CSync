@@ -144,7 +144,9 @@ int sync_server_clock(vhspec *local, int socket,
 
     microts est_server_time = best_received_server_value +
         (current_time - best_request_local_time) + (best_rtt / 2);
+
     local->offset = est_server_time - current_time;
+    local->error = best_rtt / 2;
 
     printf("Est Server Time: %ld, Computed Server Time offset: %ld\n",
            est_server_time, local->offset);
@@ -153,29 +155,23 @@ int sync_server_clock(vhspec *local, int socket,
 
 int main(int argc, char *argv[])
 {
-    if (argc < 4) {
-        printf("Usage: client [server IP] [server port] [server drift (PPM)]\n");
+    if (argc < 5) {
+        printf("Usage: client [server IP] [server port]\n");
+        printf("              [server drift (PPM)] [client drift (PPM)]\n");
         exit(1);
     }
 
-    vhspec doubling_clock = {0};
-    doubling_clock.drift_rate = 1000000;
-    if (virtual_hardware_clock_init(&doubling_clock) != 0) {
-        printf("An error occurred during initialization of doubling_clock.\n");
-        exit(1);
-    }
-
-    vhspec fast_clock = {0};
-    fast_clock.drift_rate = 500000;
-    if (virtual_hardware_clock_init(&fast_clock) != 0) {
-        printf("An error occurred during initialiation of fast_clock.\n");
+    vhspec local_hardware_clock = {0};
+    local_hardware_clock.drift_rate = atoi(argv[4]);
+    if (virtual_hardware_clock_init(&local_hardware_clock) != 0) {
+        printf("FATAL: Failed to initialize local hardware clock.\n");
         exit(1);
     }
 
     scspec soft_clock = {0};
     memset(&soft_clock, 0, sizeof(soft_clock));
     soft_clock.amortization_period = 4000000; // four seconds
-    soft_clock.vhclock = &fast_clock;
+    soft_clock.vhclock = &local_hardware_clock;
 
     /* The client's version of the server clock.
        Used for getting offline error measurements.
@@ -187,14 +183,6 @@ int main(int argc, char *argv[])
         printf("An error occurred during initialization of server_clock.\n");
         exit(1);
     }
-
-    microts last_rapport;
-    microts last_print;
-    if (real_hardware_clock_gettime(&last_rapport) != 0) {
-        printf("An error occurred when reading the real time.\n");
-        exit(1);
-    }
-    last_print = last_rapport;
 
     /* Create the client socket for sending/receiving data to the server. */
     int client_fd;
@@ -220,13 +208,22 @@ int main(int argc, char *argv[])
     virtual_hardware_clock_gettime(&server_clock, &server_clock_value);
     printf("Server clock after sync: %ld\n", server_clock_value);
 
-    while (1) {
-        microts current_real_time, doubling_clock_time,
-            fast_clock_time, soft_clock_time, error;
+    /* Use the real time clock to create data points at time intervals */
+    microts last_rapport;
+    microts last_print;
+    if (real_hardware_clock_gettime(&last_rapport) != 0) {
+        printf("An error occurred when reading the real time.\n");
+        exit(1);
+    }
+    last_print = last_rapport;
 
+    while (1) {
+        microts current_real_time, est_server_time, local_hardware_clock_time,
+            soft_clock_time, error;
         int e = real_hardware_clock_gettime(&current_real_time)
-            | virtual_hardware_clock_gettime(&doubling_clock, &doubling_clock_time)
-            | virtual_hardware_clock_gettime(&fast_clock, &fast_clock_time)
+            | virtual_hardware_clock_gettime(&server_clock, &est_server_time)
+            | virtual_hardware_clock_gettime(soft_clock.vhclock,
+                                             &local_hardware_clock_time)
             | software_clock_gettime(&soft_clock, &soft_clock_time);
 
         if (e != 0) {
@@ -234,19 +231,20 @@ int main(int argc, char *argv[])
             exit(1);
         }
 
-        error = soft_clock_time - doubling_clock_time;
+        error = soft_clock_time - est_server_time;
         if (current_real_time - last_print > PRINT_FREQUENCY) {
-            printf("RT: %ld\tDCT: %ld\tFCT: %ld\tSCT: %ld\tE: %ld\n",
-                   current_real_time, doubling_clock_time,
-                   fast_clock_time, soft_clock_time, error);
+            printf("RT: %ld\tST: %ld\tLT: %ld\te: %ld +- %ld\n",
+                   current_real_time, est_server_time, soft_clock_time,
+                   error, server_clock.error);
+
             last_print = current_real_time;
         }
 
         if (current_real_time - last_rapport > RAPPORT_PERIOD) {
             printf("Performing rapport.\n");
-            soft_clock.rapport_master = doubling_clock_time;
+            soft_clock.rapport_master = est_server_time;
             soft_clock.rapport_local = soft_clock_time;
-            soft_clock.rapport_vhc = fast_clock_time;
+            soft_clock.rapport_vhc = local_hardware_clock_time;
             last_rapport = current_real_time;
         }
     }
