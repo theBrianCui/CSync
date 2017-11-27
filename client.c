@@ -92,6 +92,7 @@ int read_server_clock(microts *result, int socket, struct sockaddr_in *server_ad
     }
 
     /* Message was lost or timed out. */
+    printf("WARN: A server response timed out.\n");
     return -1;
 }
 
@@ -212,7 +213,12 @@ int main(int argc, char *argv[])
     }
 
     /* Synchronize the local estimated server clock with the server clock */
+    microts server_clock_value;
+    virtual_hardware_clock_gettime(&server_clock, &server_clock_value);
+    printf("Server clock before sync: %ld\n", server_clock_value);
     sync_server_clock(&server_clock, client_fd, &server_addr);
+    virtual_hardware_clock_gettime(&server_clock, &server_clock_value);
+    printf("Server clock after sync: %ld\n", server_clock_value);
 
     while (1) {
         microts current_real_time, doubling_clock_time,
