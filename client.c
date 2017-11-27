@@ -14,6 +14,7 @@
 /* Unless otherwise specified, constants are given in microseconds
    (e.g. 1 * 10^6 microseconds = 1000000 = 1 second ) */
 #define CONNECTION_TIMEOUT 5000000
+#define PRINT_FREQUENCY 500000
 #define RAPPORT_PERIOD 10000000
 #define SERVER_SYNC_ATTEMPTS 10
 
@@ -101,81 +102,47 @@ int sync_server_clock(vhspec *local, int socket,
        as best as possible by assigning an offset. */
     printf("Synchronizing server_clock...\n");
 
-    microts request_local_time[SERVER_SYNC_ATTEMPTS] = {0};
-    microts received_server_time[SERVER_SYNC_ATTEMPTS] = {0};
-    microts rtt[SERVER_SYNC_ATTEMPTS] = {0};
-    uint32_t server_addr_len = sizeof(*server_addr);
-
+    microts best_rtt = LLONG_MAX;
+    microts best_request_local_time;
+    microts best_received_server_value;
     for (int i = 0; i < SERVER_SYNC_ATTEMPTS; ++i) {
-        /* Construct message: [seq number] [query string] */
-        char request_buffer[MESSAGE_SIZE] = {0};
-        char receive_buffer[MESSAGE_SIZE] = {0};
-
-        /* Assign and increment sequence number */
-        uint32_t sequence_number = next_sequence_number();
-        *(uint32_t *) request_buffer = htonl(sequence_number);
-
-        /* Insert query string */
-        strncpy(request_buffer + SEQ_NUM_SIZE, QUERY_STRING, PAYLOAD_SIZE);
-
         /* Save the current time to request_time[i] */
-        virtual_hardware_clock_gettime(local, request_local_time + i);
+        microts request_local_time;
+        virtual_hardware_clock_gettime(local, &request_local_time);
 
-        /* Send the request_buffer to the server */
-        int sresult = sendto(socket, request_buffer, MESSAGE_SIZE, MSG_DONTWAIT,
-               (struct sockaddr *) server_addr, server_addr_len);
-
-        if (sresult == -1) {
-            printf("Server Clock Sync Error: %s\n", strerror(errno));
-            exit(1);
-        }
-
-        /* Listen for incoming messages. Timeout assumes failure. */
-        int recv_len = recvfrom(socket, receive_buffer, MESSAGE_SIZE, 0, 0, 0);
-
-        /* Correct message includes sequence_number + 1 */
-        if (recv_len == MESSAGE_SIZE
-            && ntohl(*(uint32_t *) receive_buffer) == sequence_number + 1) {
-
-            /* Compute local estimated RTT */
-            microts received_local_time;
-            virtual_hardware_clock_gettime(local, &received_local_time);
-            rtt[i] = received_local_time - request_local_time[i];
-
-            microts received_ts =
-                ntohll(*(uint64_t *) (receive_buffer + SEQ_NUM_SIZE));
-
-            received_server_time[i] = received_ts;
-
-            printf("[%d/%d] ", i + 1, SERVER_SYNC_ATTEMPTS);
+        /* Read the remote clock */
+        microts server_value;
+        if (read_server_clock(&server_value, socket, server_addr) < 0) {
+            /* Assume message was lost. Retry. */
+            --i;
             continue;
         }
 
-        /* Assume message was lost. Retry with a new sequence number. */
-        --i;
-        continue;
-    }
-    printf("\n");
+        /* Read success. Compute the RTT */
+        microts response_local_time;
+        virtual_hardware_clock_gettime(local, &response_local_time);
+        microts rtt = response_local_time - request_local_time;
 
-    microts min_rtt = LLONG_MAX;
-    int min_rtt_index = -1;
-    for (int i = 0; i < SERVER_SYNC_ATTEMPTS; ++i) {
-        if (rtt[i] < min_rtt) {
-            min_rtt = rtt[i];
-            min_rtt_index = i;
+        if (rtt < best_rtt) {
+            best_rtt = rtt;
+            best_request_local_time = request_local_time;
+            best_received_server_value = server_value;
         }
+
+        printf("[%d/%d] ", i + 1, SERVER_SYNC_ATTEMPTS + 1);
     }
 
-    printf("Minimum Recorded Server Sync RTT: %ld\n", min_rtt);
+    printf("\n");
+    printf("Minimum Recorded Server Sync RTT: %ld\n", best_rtt);
+
     /* Assuming RTT is evenly divided between server and client,
        current server time is the received timestamp plus
-       time elapsed since (time the request was made plus RTT/2). */
+       (time elapsed since request) plus RTT/2. */
     microts current_time;
     virtual_hardware_clock_gettime(local, &current_time);
-    microts est_server_time = received_server_time[min_rtt_index] +
-        (current_time -
-         (request_local_time[min_rtt_index] + rtt[min_rtt_index] / 2));
 
+    microts est_server_time = best_received_server_value +
+        (current_time - best_request_local_time) + (best_rtt / 2);
     local->offset = est_server_time - current_time;
 
     printf("Est Server Time: %ld, Computed Server Time offset: %ld\n",
@@ -248,35 +215,6 @@ int main(int argc, char *argv[])
     sync_server_clock(&server_clock, client_fd, &server_addr);
 
     while (1) {
-        /* Construct message: [seq number] [query string] */
-        char request_buffer[MESSAGE_SIZE] = {0};
-        char receive_buffer[MESSAGE_SIZE] = {0};
-
-        /* Assign and increment sequence number */
-        uint32_t sequence_number = next_sequence_number();
-        *(uint32_t *) request_buffer = htonl(sequence_number);
-
-        /* Insert query string */
-        strncpy(request_buffer + SEQ_NUM_SIZE, QUERY_STRING, PAYLOAD_SIZE);
-
-        /* Send the request_buffer to the server */
-        sendto(client_fd, request_buffer, MESSAGE_SIZE, MSG_DONTWAIT,
-               (struct sockaddr *) &server_addr, server_addr_len);
-
-        /* Listen for incoming messages (will eventually timeout) */
-        int recv_len = recvfrom(client_fd, receive_buffer,
-                                MESSAGE_SIZE, 0, 0, 0);
-
-        if (recv_len == MESSAGE_SIZE) {
-            uint32_t received_seq_num = ntohl(*(uint32_t *) receive_buffer);
-            if (received_seq_num == sequence_number + 1) {
-                microts received_ts =
-                    ntohll(*(uint64_t *) (receive_buffer + SEQ_NUM_SIZE));
-
-                printf("Received: [%d] [%ld]\n", received_seq_num, received_ts);
-            }
-        }
-
         microts current_real_time, doubling_clock_time,
             fast_clock_time, soft_clock_time, error;
 
@@ -291,9 +229,12 @@ int main(int argc, char *argv[])
         }
 
         error = soft_clock_time - doubling_clock_time;
-        printf("RT: %ld\tDCT: %ld\tFCT: %ld\tSCT: %ld\tE: %ld\n",
-               current_real_time, doubling_clock_time,
-               fast_clock_time, soft_clock_time, error);
+        if (current_real_time - last_print > PRINT_FREQUENCY) {
+            printf("RT: %ld\tDCT: %ld\tFCT: %ld\tSCT: %ld\tE: %ld\n",
+                   current_real_time, doubling_clock_time,
+                   fast_clock_time, soft_clock_time, error);
+            last_print = current_real_time;
+        }
 
         if (current_real_time - last_rapport > RAPPORT_PERIOD) {
             printf("Performing rapport.\n");
