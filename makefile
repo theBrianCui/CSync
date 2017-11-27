@@ -1,8 +1,10 @@
-CC = clang-3.5
+CC = clang
 CFLAGS = -g -std=c99
 CLIENT_OBJECTS = client.o sclock.o
 SERVER_OBJECTS = server.o sclock.o
-.PHONY : clean
+.PHONY : all clean
+
+all : client server
 
 client : $(CLIENT_OBJECTS)
 	$(CC) $(CFLAGS) $(CLIENT_OBJECTS) -o client -lm
