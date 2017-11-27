@@ -13,7 +13,7 @@
 
 /* Unless otherwise specified, constants are given in microseconds
    (e.g. 1 * 10^6 microseconds = 1000000 = 1 second ) */
-#define POLL_PERIOD 2000000
+#define CONNECTION_TIMEOUT 5000000
 #define RAPPORT_PERIOD 10000000
 #define SERVER_SYNC_ATTEMPTS 10
 
@@ -22,7 +22,7 @@ uint32_t next_sequence_number() {
     return current_sequence_number++;
 }
 
-int create_client_socket(int *fd, microts timeout_usec) {
+int create_client_socket(int *fd) {
     /* Create a socket for sending / receiving requests to the server */
     int client_fd;
     if ((client_fd = socket(AF_INET, SOCK_DGRAM, 0)) < 0) {
@@ -30,17 +30,19 @@ int create_client_socket(int *fd, microts timeout_usec) {
         return -1;
     }
 
-    /* Assign a receive timeout as a function of the POLL_PERIOD */
+    *fd = client_fd;
+    return 0;
+}
+
+int set_socket_timeout(int fd, microts timeout_usec) {
     struct timeval timeout;
     timeout.tv_sec = timeout_usec / MILLION;
     timeout.tv_usec = timeout_usec % MILLION;
-    if (setsockopt(client_fd, SOL_SOCKET, SO_RCVTIMEO,
+    if (setsockopt(fd, SOL_SOCKET, SO_RCVTIMEO,
                    &timeout, sizeof(timeout)) < 0) {
         printf("Client timeout assignment failed.\n");
         return -1;
     }
-
-    *fd = client_fd;
     return 0;
 }
 
@@ -54,9 +56,47 @@ int build_server_address(struct sockaddr_in *server_addr, char *ip, int port) {
     return 0;
 }
 
-int sync_server_clock(vhspec *local, int socket, 
+/* Attempt to read the remote clock.
+   If successful, stores the timestamp read in result and returns 0.
+   If unsuccessful, returns -1. */
+int read_server_clock(microts *result, int socket, struct sockaddr_in *server_addr) {
+    /* Construct message: [seq number] [query string] */
+    char request_buffer[MESSAGE_SIZE] = {0};
+    char receive_buffer[MESSAGE_SIZE] = {0};
+
+    /* Assign and increment sequence number */
+    uint32_t sequence_number = next_sequence_number();
+    *(uint32_t *) request_buffer = htonl(sequence_number);
+
+    /* Insert query string */
+    strncpy(request_buffer + SEQ_NUM_SIZE, QUERY_STRING, PAYLOAD_SIZE);
+
+    /* Send the request_buffer to the server */
+    int sresult = sendto(socket, request_buffer, MESSAGE_SIZE, MSG_DONTWAIT,
+                         (struct sockaddr *) server_addr, sizeof(*server_addr));
+
+    if (sresult == -1) {
+        printf("FATAL: sendto failed in read_server_clock. %s\n", strerror(errno));
+        exit(1);
+    }
+
+    /* Listen for incoming messages. Timeout assumes failure. */
+    int recv_len = recvfrom(socket, receive_buffer, MESSAGE_SIZE, 0, 0, 0);
+
+    /* Correct message includes sequence_number + 1 */
+    if (recv_len == MESSAGE_SIZE
+        && ntohl(*(uint32_t *) receive_buffer) == sequence_number + 1) {
+        *result = ntohll(*(uint64_t *) (receive_buffer + SEQ_NUM_SIZE));
+        return 0;
+    }
+
+    /* Message was lost or timed out. */
+    return -1;
+}
+
+int sync_server_clock(vhspec *local, int socket,
                       struct sockaddr_in *server_addr) {
-    
+
     /* Synchronize the server_clock with the actual server_clock
        as best as possible by assigning an offset. */
     printf("Synchronizing server_clock...\n");
@@ -128,12 +168,12 @@ int sync_server_clock(vhspec *local, int socket,
 
     printf("Minimum Recorded Server Sync RTT: %ld\n", min_rtt);
     /* Assuming RTT is evenly divided between server and client,
-       current server time is the received timestamp plus 
+       current server time is the received timestamp plus
        time elapsed since (time the request was made plus RTT/2). */
     microts current_time;
     virtual_hardware_clock_gettime(local, &current_time);
     microts est_server_time = received_server_time[min_rtt_index] +
-        (current_time - 
+        (current_time -
          (request_local_time[min_rtt_index] + rtt[min_rtt_index] / 2));
 
     local->offset = est_server_time - current_time;
@@ -190,7 +230,8 @@ int main(int argc, char *argv[])
 
     /* Create the client socket for sending/receiving data to the server. */
     int client_fd;
-    if (create_client_socket(&client_fd, POLL_PERIOD) < 0) {
+    if (create_client_socket(&client_fd) < 0
+        || set_socket_timeout(client_fd, CONNECTION_TIMEOUT)) {
         printf("Could not create client socket.\n");
         exit(1);
     }
@@ -223,7 +264,7 @@ int main(int argc, char *argv[])
                (struct sockaddr *) &server_addr, server_addr_len);
 
         /* Listen for incoming messages (will eventually timeout) */
-        int recv_len = recvfrom(client_fd, receive_buffer, 
+        int recv_len = recvfrom(client_fd, receive_buffer,
                                 MESSAGE_SIZE, 0, 0, 0);
 
         if (recv_len == MESSAGE_SIZE) {
