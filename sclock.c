@@ -27,9 +27,9 @@ int software_clock_gettime(scspec *s, microts *result) {
             (s->rapport_vhc + s->amortization_period);
 
     } else {
-        printf("s->rapport_master: %ld, s->rapport_local: %ld, diff: %lf\n",
-               s->rapport_master, s->rapport_local,
-               (double) (s->rapport_master - s->rapport_local));
+        /* printf("s->rapport_master: %ld, s->rapport_local: %ld, diff: %lf\n", */
+        /*        s->rapport_master, s->rapport_local, */
+        /*        (double) (s->rapport_master - s->rapport_local)); */
         // m = (M - L)/a
         multiplier = ((double) (s->rapport_master - s->rapport_local)) /
             ((double) s->amortization_period);
@@ -38,7 +38,7 @@ int software_clock_gettime(scspec *s, microts *result) {
         offset = llrint(s->rapport_local - ((1 + multiplier) * s->rapport_vhc));
     }
 
-    printf("Multiplier: %lf, Offset: %ld\n", multiplier, offset);
+    //printf("Multiplier: %lf, Offset: %ld\n", multiplier, offset);
 
     // L = H * (1 + m) + N
     *result = llrint(vhc_time * (1 + multiplier)) + offset;
