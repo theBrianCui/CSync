@@ -15,7 +15,7 @@ int main(int argc, char const *argv[]) {
     vhspec server_clock;
     server_clock.drift_rate = atoi(argv[1]);
     if (virtual_hardware_clock_init(&server_clock) != 0) {
-        printf("An error occurred during virtual hardware clock initialization.\n");
+        printf("FATAL: Failed to initialize server virtual hardware clock.\n");
         exit(1);
     }
 
@@ -31,20 +31,20 @@ int main(int argc, char const *argv[]) {
 
     // Create socket file descriptor. 0 indicates failure.
     if ((server_fd = socket(AF_INET, SOCK_DGRAM, 0)) <= 0) {
-        printf("Socket creation failed. Exiting.\n");
+        printf("FATAL: Socket creation failed.\n");
         exit(1);
     }
 
     // Allow reuse of local addresses and ports
     if (setsockopt(server_fd, SOL_SOCKET, SO_REUSEADDR | SO_REUSEPORT,
                    &opt, sizeof(opt))) {
-        printf("Socket option assignment failed. Exiting.\n");
+        printf("FATAL: Socket option assignment failed.\n");
         exit(1);
     }
 
     // Bind the socket to a port
     if (bind(server_fd, (struct sockaddr *) &address, sizeof(address)) < 0) {
-        printf("Socket binding failed. Exiting.\n");
+        printf("FATAL: Socket binding failed.\n");
         exit(1);
     }
 

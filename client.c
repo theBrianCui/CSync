@@ -180,7 +180,7 @@ int main(int argc, char *argv[])
     vhspec server_clock = {0};
     server_clock.drift_rate = atoi(argv[3]);
     if (virtual_hardware_clock_init(&server_clock) != 0) {
-        printf("An error occurred during initialization of server_clock.\n");
+        printf("FATAL: Failed to initialize estimated server clock.\n");
         exit(1);
     }
 
@@ -188,7 +188,7 @@ int main(int argc, char *argv[])
     int client_fd;
     if (create_client_socket(&client_fd) < 0
         || set_socket_timeout(client_fd, CONNECTION_TIMEOUT)) {
-        printf("Could not create client socket.\n");
+        printf("FATAL: Could not create client socket.\n");
         exit(1);
     }
 
@@ -196,7 +196,7 @@ int main(int argc, char *argv[])
     struct sockaddr_in server_addr = {0};
     uint32_t server_addr_len = sizeof(server_addr);
     if (build_server_address(&server_addr, argv[1], atoi(argv[2]))) {
-        printf("Could not construct server address.\n");
+        printf("FATAL: Could not construct server address.\n");
         exit(1);
     }
 
@@ -208,44 +208,66 @@ int main(int argc, char *argv[])
     virtual_hardware_clock_gettime(&server_clock, &server_clock_value);
     printf("Server clock after sync: %ld\n", server_clock_value);
 
-    /* Use the real time clock to create data points at time intervals */
-    microts last_rapport;
-    microts last_print;
-    if (real_hardware_clock_gettime(&last_rapport) != 0) {
-        printf("An error occurred when reading the real time.\n");
-        exit(1);
-    }
-    last_print = last_rapport;
+    /* Use the real time clock to create data points at time intervals.
+       Both print and rapport happen immediately. */
+    microts last_rapport = 0;
+    microts last_print = 0;
 
     while (1) {
-        microts current_real_time, est_server_time, local_hardware_clock_time,
+        microts current_real_time, local_server_time, local_hardware_clock_time,
             soft_clock_time, error;
         int e = real_hardware_clock_gettime(&current_real_time)
-            | virtual_hardware_clock_gettime(&server_clock, &est_server_time)
+            | virtual_hardware_clock_gettime(&server_clock, &local_server_time)
             | virtual_hardware_clock_gettime(soft_clock.vhclock,
                                              &local_hardware_clock_time)
             | software_clock_gettime(&soft_clock, &soft_clock_time);
 
         if (e != 0) {
-            printf("An error occurred during runtime.\n");
+            printf("FATAL: A clock read error occurred during runtime.\n");
             exit(1);
         }
 
-        error = soft_clock_time - est_server_time;
+        error = soft_clock_time - local_server_time;
         if (current_real_time - last_print > PRINT_FREQUENCY) {
             printf("RT: %ld\tST: %ld\tLT: %ld\te: %ld +- %ld\n",
-                   current_real_time, est_server_time, soft_clock_time,
+                   current_real_time, local_server_time, soft_clock_time,
                    error, server_clock.error);
 
             last_print = current_real_time;
         }
 
         if (current_real_time - last_rapport > RAPPORT_PERIOD) {
-            printf("Performing rapport.\n");
+            printf("Attempting rapport...\t");
+
+            /* for now, pretend min = server_clock.error */
+            /* microts min = server_clock.error;*/
+
+            /* If this code is reached, adjustment should have ended already
+               and the software clock will reflect the hardware clock with no
+               adjustments. Thus software_clock_gettime could be replaced with
+               virtual_hardware_clock_gettime with insignificant differences. */
+            microts request_local_time, response_local_time, response_value,
+                response_local_hardware_time;
+            software_clock_gettime(&soft_clock, &request_local_time);
+
+            if (read_server_clock(&response_value, client_fd, &server_addr) != 0) {
+                continue;
+            }
+
+            software_clock_gettime(&soft_clock, &response_local_time);
+            virtual_hardware_clock_gettime(soft_clock.vhclock,
+                                           &response_local_hardware_time);
+
+            microts rtt = response_local_time - request_local_time;
+            microts est_server_time = response_value + rtt/2;
+
             soft_clock.rapport_master = est_server_time;
-            soft_clock.rapport_local = soft_clock_time;
-            soft_clock.rapport_vhc = local_hardware_clock_time;
-            last_rapport = current_real_time;
+            soft_clock.rapport_local = response_local_time;
+            soft_clock.rapport_vhc = response_local_hardware_time;
+
+            real_hardware_clock_gettime(&last_rapport);
+            printf("Timestamp received: %ld\tRTT: %ld\tEst ST: %ld\n",
+                   response_value, rtt, est_server_time);
         }
     }
 }
