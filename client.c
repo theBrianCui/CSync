@@ -16,7 +16,7 @@
 #define CONNECTION_TIMEOUT 5000000
 #define PRINT_FREQUENCY 500000
 #define RAPPORT_PERIOD 10000000
-#define SERVER_SYNC_ATTEMPTS 10
+#define SERVER_SYNC_ATTEMPTS 50
 
 uint32_t next_sequence_number() {
     static uint32_t current_sequence_number = 0;
@@ -129,6 +129,9 @@ int sync_server_clock(vhspec *local, int socket,
             best_request_local_time = request_local_time;
             best_received_server_value = server_value;
         }
+
+        if (i % 10 == 0 && i != 0)
+            printf("\n");
 
         printf("[%d/%d] ", i + 1, SERVER_SYNC_ATTEMPTS + 1);
     }
@@ -258,6 +261,8 @@ int main(int argc, char *argv[])
             virtual_hardware_clock_gettime(soft_clock.vhclock,
                                            &response_local_hardware_time);
 
+            /* server time is in the interval [T + min, T + 2D - min]
+               best estimate (middle of interval) is T + D */
             microts rtt = response_local_time - request_local_time;
             microts est_server_time = response_value + rtt/2;
 
