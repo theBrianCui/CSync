@@ -114,9 +114,13 @@ int sync_server_clock(vhspec *local, int socket,
        as best as possible by assigning an offset. */
     printf("Synchronizing server_clock...\n");
 
+    microts sum_rtt = 0;
+    microts worst_rtt = 0;
+
     microts best_rtt = LLONG_MAX;
     microts best_request_local_time;
     microts best_received_server_value;
+
     for (int i = 0; i < SERVER_SYNC_ATTEMPTS; ++i) {
         /* Save the current time to request_time[i] */
         microts request_local_time;
@@ -135,11 +139,18 @@ int sync_server_clock(vhspec *local, int socket,
         virtual_hardware_clock_gettime(local, &response_local_time);
         microts rtt = response_local_time - request_local_time;
 
+        sum_rtt += rtt;
+
+        /* If best rtt, save request information */
         if (rtt < best_rtt) {
             best_rtt = rtt;
             best_request_local_time = request_local_time;
             best_received_server_value = server_value;
         }
+
+        /* Keep the worst rtt too, for fun */
+        if (rtt > worst_rtt)
+            worst_rtt = rtt;
 
         if (i % 10 == 0 && i != 0)
             printf("\n");
@@ -148,16 +159,19 @@ int sync_server_clock(vhspec *local, int socket,
     }
 
     printf("\n");
-    printf("Minimum Recorded Server Sync RTT: %ld\n", best_rtt);
+    printf("Best Server Sync RTT: %ld, Worst Server Sync RTT: %ld\n",
+           best_rtt, worst_rtt);
+
+    printf("Average RTT: %lf\n", (double) sum_rtt / SERVER_SYNC_ATTEMPTS);
 
     /* Assuming RTT is evenly divided between server and client,
        current server time is the received timestamp plus
-       (time elapsed since request) plus RTT/2. */
+       (time elapsed since request) minus RTT/2. */
     microts current_time;
     virtual_hardware_clock_gettime(local, &current_time);
 
     microts est_server_time = best_received_server_value +
-        (current_time - best_request_local_time) + (best_rtt / 2);
+        (current_time - best_request_local_time) - (best_rtt / 2);
 
     local->offset = est_server_time - current_time;
     local->error = best_rtt / 2;
