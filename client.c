@@ -81,12 +81,23 @@ int read_server_clock(microts *result, int socket, struct sockaddr_in *server_ad
         exit(1);
     }
 
-    /* Listen for incoming messages. Timeout assumes failure. */
-    int recv_len = recvfrom(socket, receive_buffer, MESSAGE_SIZE, 0, 0, 0);
+    while (1) {
+        /* Listen for incoming messages. Timeout assumes failure.
+           If the incoming sequence number is from an old message, keep waiting. */
+        int recv_len = recvfrom(socket, receive_buffer, MESSAGE_SIZE, 0, 0, 0);
 
-    /* Correct message includes sequence_number + 1 */
-    if (recv_len == MESSAGE_SIZE
-        && ntohl(*(uint32_t *) receive_buffer) == sequence_number + 1) {
+        /* recv_len == -1 indicates timeout occurred. */
+        if (recv_len < 0)
+            break;
+
+        /* Incorrect sequence numbers are equal to the sent sequence number
+           or less than the sent sequence number. The two conditions are necessary
+           for correct function with unsigned numbers. */
+        if (recv_len != MESSAGE_SIZE ||
+            ntohl(*(uint32_t *) receive_buffer) != sequence_number + 1)
+            continue;
+
+        /* Length and sequence number correct. Everything looks good. */
         *result = ntohll(*(uint64_t *) (receive_buffer + SEQ_NUM_SIZE));
         return 0;
     }
