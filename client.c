@@ -9,6 +9,7 @@
 #include <netinet/in.h>
 #include <arpa/inet.h>
 #include <limits.h>
+#include <math.h>
 #include "sclock.h"
 
 /* Unless otherwise specified, constants are given in microseconds
@@ -16,7 +17,7 @@
 #define CONNECTION_TIMEOUT 5000000
 #define PRINT_FREQUENCY 500000
 #define RAPPORT_PERIOD 10000000
-#define SERVER_SYNC_ATTEMPTS 50
+#define SERVER_SYNC_ATTEMPTS 100
 
 uint32_t next_sequence_number() {
     static uint32_t current_sequence_number = 0;
@@ -178,6 +179,44 @@ int sync_server_clock(vhspec *local, int socket,
 
     printf("Est Server Time: %ld, Computed Server Time offset: %ld\n",
            est_server_time, local->offset);
+
+    /* Verify the accuracy of the estimate and make minor adjustments
+       if necessary to balance out channel inbalances. */
+    printf("Evaluating communication channel balance...\n");
+    microts imbalance_sum;
+    for (int i = 0; i < SERVER_SYNC_ATTEMPTS; ++i) {
+        /* Save the current time to request_time[i] */
+        microts request_local_time;
+        virtual_hardware_clock_gettime(local, &request_local_time);
+
+        /* Read the remote clock */
+        microts server_value;
+        if (read_server_clock(&server_value, socket, server_addr) < 0) {
+            /* Assume message was lost. Retry. */
+            --i;
+            continue;
+        }
+
+        /* Read success. Compute the RTT */
+        microts response_local_time;
+        virtual_hardware_clock_gettime(local, &response_local_time);
+        microts rtt = response_local_time - request_local_time;
+
+        /* In a perfectly symmetrical communication channel,
+           server_value should be equal to request_local_time + RTT/2 */
+        imbalance_sum += (server_value) - (request_local_time + rtt/2);
+
+        if (i % 10 == 0 && i != 0)
+            printf("\n");
+
+        printf("[%d/%d] ", i + 1, SERVER_SYNC_ATTEMPTS + 1);
+    }
+
+    double imbalance_avg = imbalance_sum / (double) (SERVER_SYNC_ATTEMPTS);
+    printf("Average imbalance: %lf. Adjusting local server clock.\n",
+           imbalance_avg);
+    local->offset += llrint(imbalance_avg);
+
     return 0;
 }
 
