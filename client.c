@@ -15,7 +15,8 @@
    (e.g. 1 * 10^6 microseconds = 1000000 = 1 second ) */
 #define CONNECTION_TIMEOUT 5000000
 #define PRINT_FREQUENCY 500000
-#define RAPPORT_PERIOD 10000000
+#define RAPPORT_PERIOD 1000000
+#define AMORTIZATION_PERIOD 500000
 #define SERVER_SYNC_ATTEMPTS 50
 
 uint32_t next_sequence_number() {
@@ -183,9 +184,10 @@ int sync_server_clock(vhspec *local, int socket,
 
 int main(int argc, char *argv[])
 {
-    if (argc < 5) {
+    if (argc < 6) {
         printf("Usage: client [server IP] [server port]\n");
         printf("              [server drift (PPM)] [client drift (PPM)]\n");
+        printf("              [simulation runtime (seconds)]\n");
         exit(1);
     }
 
@@ -198,7 +200,7 @@ int main(int argc, char *argv[])
 
     scspec soft_clock = {0};
     memset(&soft_clock, 0, sizeof(soft_clock));
-    soft_clock.amortization_period = 4000000; // four seconds
+    soft_clock.amortization_period = AMORTIZATION_PERIOD; // four seconds
     soft_clock.vhclock = &local_hardware_clock;
 
     /* The client's version of the server clock.
@@ -241,19 +243,25 @@ int main(int argc, char *argv[])
     microts last_rapport = 0;
     microts last_print = 0;
 
+    microts current_real_time, local_server_time, local_hardware_clock_time,
+        soft_clock_time, remote_est_time, error, e, simulation_end_time;
+
+    real_hardware_clock_gettime(&current_real_time);
+    simulation_end_time = current_real_time + atoi(argv[5]) * MILLION;
+
     printf("\n====== SIMULATION METADATA     =====\n");
     printf("Server IP: %s, Port: %d\n", argv[1], atoi(argv[2]));
     printf("Server Drift: %d PPM, Client Drift: %d PPM\n",
            atoi(argv[3]), atoi(argv[4]));
     printf("Local Server Time Error: %ld\n", server_clock.error);
+    printf("Simulation runtime: %d seconds\n", atoi(argv[5]));
     printf("====== SIMULATION OUTPUT START =====\n");
     printf("Current Real Time,Local Server Time,Hardware Clock Time,\
 Software Clock Time,Error,Remote Est Time,\n");
 
-    while (1) {
-        microts current_real_time, local_server_time, local_hardware_clock_time,
-            soft_clock_time, remote_est_time, error;
-        int e = real_hardware_clock_gettime(&current_real_time)
+    /* Simulation begins, exits when time limit reached */
+    while (current_real_time < simulation_end_time) {
+        e = real_hardware_clock_gettime(&current_real_time)
             | virtual_hardware_clock_gettime(&server_clock, &local_server_time)
             | virtual_hardware_clock_gettime(soft_clock.vhclock,
                                              &local_hardware_clock_time)
@@ -308,7 +316,7 @@ Software Clock Time,Error,Remote Est Time,\n");
                 | virtual_hardware_clock_gettime(soft_clock.vhclock,
                                                  &local_hardware_clock_time)
                 | software_clock_gettime(&soft_clock, &soft_clock_time);
-            
+
             if (e != 0) {
                 printf("FATAL: A clock read error occurred during runtime.\n");
                 exit(1);
