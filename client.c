@@ -241,9 +241,18 @@ int main(int argc, char *argv[])
     microts last_rapport = 0;
     microts last_print = 0;
 
+    printf("\n====== SIMULATION METADATA     =====\n");
+    printf("Server IP: %s, Port: %d\n", argv[1], atoi(argv[2]));
+    printf("Server Drift: %d PPM, Client Drift: %d PPM\n",
+           atoi(argv[3]), atoi(argv[4]));
+    printf("Local Server Time Error: %ld\n", server_clock.error);
+    printf("====== SIMULATION OUTPUT START =====\n");
+    printf("Current Real Time,Local Server Time,Hardware Clock Time,\
+Software Clock Time,Error,Remote Est Time,\n");
+
     while (1) {
         microts current_real_time, local_server_time, local_hardware_clock_time,
-            soft_clock_time, error;
+            soft_clock_time, remote_est_time, error;
         int e = real_hardware_clock_gettime(&current_real_time)
             | virtual_hardware_clock_gettime(&server_clock, &local_server_time)
             | virtual_hardware_clock_gettime(soft_clock.vhclock,
@@ -256,16 +265,19 @@ int main(int argc, char *argv[])
         }
 
         error = soft_clock_time - local_server_time;
+/* Current Real Time,Local Server Time,Hardware Clock Time, */
+/* Software Clock Time,Error,Remote Est Time, */
+
         if (current_real_time - last_print > PRINT_FREQUENCY) {
-            printf("RT: %ld\tST: %ld\tLT: %ld\te: %ld +- %ld\n",
-                   current_real_time, local_server_time, soft_clock_time,
-                   error, server_clock.error);
+            printf("%ld,%ld,%ld,%ld,%ld,,\n",
+                   current_real_time, local_server_time, local_hardware_clock_time,
+                   soft_clock_time, error);
 
             last_print = current_real_time;
         }
 
         if (current_real_time - last_rapport > RAPPORT_PERIOD) {
-            printf("Attempting rapport...\t");
+            //printf("Attempting rapport...\t");
 
             /* for now, pretend min = server_clock.error */
             /* microts min = server_clock.error;*/
@@ -291,13 +303,28 @@ int main(int argc, char *argv[])
             microts rtt = response_local_time - request_local_time;
             microts est_server_time = response_value + rtt/2;
 
+            e = real_hardware_clock_gettime(&current_real_time)
+                | virtual_hardware_clock_gettime(&server_clock, &local_server_time)
+                | virtual_hardware_clock_gettime(soft_clock.vhclock,
+                                                 &local_hardware_clock_time)
+                | software_clock_gettime(&soft_clock, &soft_clock_time);
+            
+            if (e != 0) {
+                printf("FATAL: A clock read error occurred during runtime.\n");
+                exit(1);
+            }
+            error = soft_clock_time - local_server_time;
+            printf("%ld,%ld,%ld,%ld,%ld,%ld,\n",
+                   current_real_time, local_server_time, local_hardware_clock_time,
+                   soft_clock_time, error, est_server_time);
+
             soft_clock.rapport_master = est_server_time;
             soft_clock.rapport_local = response_local_time;
             soft_clock.rapport_vhc = response_local_hardware_time;
 
             real_hardware_clock_gettime(&last_rapport);
-            printf("Timestamp received: %ld\tRTT: %ld\tEst ST: %ld\n",
-                   response_value, rtt, est_server_time);
+            /* printf("Timestamp received: %ld\tRTT: %ld\tEst ST: %ld\n", */
+            /* response_value, rtt, est_server_time); */
         }
     }
 }
