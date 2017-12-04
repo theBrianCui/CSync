@@ -199,8 +199,8 @@ int main(int argc, char *argv[])
 
     /* Weigh server, local VHC drift by relative drift to correct native drift */
     const microts RELATIVE_DRIFT = atol(argv[5]);
-    const microts SERVER_DRIFT = atol(argv[3]) - RELATIVE_DRIFT;
-    const microts LOCAL_VHC_DRIFT = atol(argv[4]) - RELATIVE_DRIFT;
+    const microts SERVER_DRIFT = atol(argv[3]) + RELATIVE_DRIFT;
+    const microts LOCAL_VHC_DRIFT = atol(argv[4]) + RELATIVE_DRIFT;
 
     const microts SIMULATION_RUNTIME = atoi(argv[6]) * MILLION;
     const microts RAPPORT_PERIOD = atol(argv[7]);
@@ -268,7 +268,7 @@ int main(int argc, char *argv[])
     printf("\n====== SIMULATION METADATA     =====\n");
     printf("Server IP: %s, Port: %d\n", SERVER_IP, SERVER_PORT);
     printf("Server Drift: %ld PPM, Client VHC Drift: %ld PPM\n",
-           SERVER_DRIFT, LOCAL_VHC_DRIFT);
+           SERVER_DRIFT - RELATIVE_DRIFT, LOCAL_VHC_DRIFT - RELATIVE_DRIFT);
     printf("Relative Drift Weight: %ld\n", RELATIVE_DRIFT);
     printf("Local Server Time Error: %ld\n", server_clock.error);
     printf("Simulation runtime: %ld seconds\n", SIMULATION_RUNTIME / MILLION);
