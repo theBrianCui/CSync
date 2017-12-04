@@ -273,6 +273,8 @@ int main(int argc, char *argv[])
            SERVER_DRIFT - RELATIVE_DRIFT, LOCAL_VHC_DRIFT - RELATIVE_DRIFT);
     printf("Relative Drift Weight: %ld\n", RELATIVE_DRIFT);
     printf("Local Server Time Error: %ld\n", server_clock.error);
+    printf("Rapport Period: %ld\n", RAPPORT_PERIOD);
+    printf("Amortization Period: %ld\n", AMORTIZATION_PERIOD);
     printf("Simulation runtime: %ld seconds\n", SIMULATION_RUNTIME / MILLION);
     printf("====== SIMULATION OUTPUT START =====\n");
     printf("Current Real Time,Local Server Time,Hardware Clock Time,\
