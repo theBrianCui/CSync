@@ -14,7 +14,7 @@
 /* Unless otherwise specified, constants are given in microseconds
    (e.g. 1 * 10^6 microseconds = 1000000 = 1 second ) */
 //#define CONNECTION_TIMEOUT 5000000
-#define PRINT_FREQUENCY 500000
+//#define PRINT_FREQUENCY 500000
 //#define RAPPORT_PERIOD 1000000
 //#define AMORTIZATION_PERIOD 500000
 #define SERVER_SYNC_ATTEMPTS 50
@@ -184,7 +184,7 @@ int sync_server_clock(vhspec *local, int socket,
 
 int main(int argc, char *argv[])
 {
-    if (argc < 9) {
+    if (argc < 10) {
         printf("Usage: client [server IP] [server port]\n");
         printf("              [server simulated drift (PPM)] [client VH drift (PPM)]\n");
         printf("              [client-server RHW relative drift (PPM)]\n");
@@ -192,6 +192,7 @@ int main(int argc, char *argv[])
         printf("              [rapport period (usec)]\n");
         printf("              [timeout (usec)]\n");
         printf("              [amortization period (usec)]\n");
+        printf("              [print frequency (usec)]\n");
         exit(1);
     }
     char *const SERVER_IP = argv[1];
@@ -206,6 +207,7 @@ int main(int argc, char *argv[])
     const microts RAPPORT_PERIOD = atol(argv[7]);
     const microts NETWORK_TIMEOUT = atol(argv[8]);
     const microts AMORTIZATION_PERIOD = atol(argv[9]);
+    const microts PRINT_FREQUENCY = atol(argv[10]);
 
     vhspec local_hardware_clock = {0};
     local_hardware_clock.drift_rate = LOCAL_VHC_DRIFT;
