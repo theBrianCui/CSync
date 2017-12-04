@@ -203,7 +203,7 @@ int main(int argc, char *argv[])
     const microts SERVER_DRIFT = atol(argv[3]) + RELATIVE_DRIFT;
     const microts LOCAL_VHC_DRIFT = atol(argv[4]) + RELATIVE_DRIFT;
 
-    const microts SIMULATION_RUNTIME = atoi(argv[6]) * MILLION;
+    const microts SIMULATION_RUNTIME = atol(argv[6]) * MILLION;
     const microts RAPPORT_PERIOD = atol(argv[7]);
     const microts NETWORK_TIMEOUT = atol(argv[8]);
     const microts AMORTIZATION_PERIOD = atol(argv[9]);
