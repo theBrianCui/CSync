@@ -13,10 +13,10 @@
 
 /* Unless otherwise specified, constants are given in microseconds
    (e.g. 1 * 10^6 microseconds = 1000000 = 1 second ) */
-#define CONNECTION_TIMEOUT 5000000
+//#define CONNECTION_TIMEOUT 5000000
 #define PRINT_FREQUENCY 500000
-#define RAPPORT_PERIOD 1000000
-#define AMORTIZATION_PERIOD 500000
+//#define RAPPORT_PERIOD 1000000
+//#define AMORTIZATION_PERIOD 500000
 #define SERVER_SYNC_ATTEMPTS 50
 
 uint32_t next_sequence_number() {
@@ -184,15 +184,31 @@ int sync_server_clock(vhspec *local, int socket,
 
 int main(int argc, char *argv[])
 {
-    if (argc < 6) {
+    if (argc < 9) {
         printf("Usage: client [server IP] [server port]\n");
-        printf("              [server drift (PPM)] [client drift (PPM)]\n");
+        printf("              [server simulated drift (PPM)] [client VH drift (PPM)]\n");
+        printf("              [client-server RHW relative drift (PPM)]\n");
         printf("              [simulation runtime (seconds)]\n");
+        printf("              [rapport period (usec)]\n");
+        printf("              [timeout (usec)]\n");
+        printf("              [amortization period (usec)]\n");
         exit(1);
     }
+    char *const SERVER_IP = argv[1];
+    const int SERVER_PORT = atoi(argv[2]);
+
+    /* Weigh server, local VHC drift by relative drift to correct native drift */
+    const microts RELATIVE_DRIFT = atol(argv[5]);
+    const microts SERVER_DRIFT = atol(argv[3]) - RELATIVE_DRIFT;
+    const microts LOCAL_VHC_DRIFT = atol(argv[4]) - RELATIVE_DRIFT;
+
+    const microts SIMULATION_RUNTIME = atoi(argv[6]) * MILLION;
+    const microts RAPPORT_PERIOD = atol(argv[7]);
+    const microts NETWORK_TIMEOUT = atol(argv[8]);
+    const microts AMORTIZATION_PERIOD = atol(argv[9]);
 
     vhspec local_hardware_clock = {0};
-    local_hardware_clock.drift_rate = atoi(argv[4]);
+    local_hardware_clock.drift_rate = LOCAL_VHC_DRIFT;
     if (virtual_hardware_clock_init(&local_hardware_clock) != 0) {
         printf("FATAL: Failed to initialize local hardware clock.\n");
         exit(1);
@@ -200,7 +216,7 @@ int main(int argc, char *argv[])
 
     scspec soft_clock = {0};
     memset(&soft_clock, 0, sizeof(soft_clock));
-    soft_clock.amortization_period = AMORTIZATION_PERIOD; // four seconds
+    soft_clock.amortization_period = AMORTIZATION_PERIOD;
     soft_clock.vhclock = &local_hardware_clock;
 
     /* The client's version of the server clock.
@@ -208,7 +224,7 @@ int main(int argc, char *argv[])
        The software clock is unaware of this clock (or else the simulation would
        be unnecessary). */
     vhspec server_clock = {0};
-    server_clock.drift_rate = atoi(argv[3]);
+    server_clock.drift_rate = SERVER_DRIFT;
     if (virtual_hardware_clock_init(&server_clock) != 0) {
         printf("FATAL: Failed to initialize estimated server clock.\n");
         exit(1);
@@ -217,7 +233,7 @@ int main(int argc, char *argv[])
     /* Create the client socket for sending/receiving data to the server. */
     int client_fd;
     if (create_client_socket(&client_fd) < 0
-        || set_socket_timeout(client_fd, CONNECTION_TIMEOUT)) {
+        || set_socket_timeout(client_fd, NETWORK_TIMEOUT)) {
         printf("FATAL: Could not create client socket.\n");
         exit(1);
     }
@@ -225,7 +241,7 @@ int main(int argc, char *argv[])
     /* Build the server address struct with IP, port */
     struct sockaddr_in server_addr = {0};
     uint32_t server_addr_len = sizeof(server_addr);
-    if (build_server_address(&server_addr, argv[1], atoi(argv[2]))) {
+    if (build_server_address(&server_addr, SERVER_IP, SERVER_PORT)) {
         printf("FATAL: Could not construct server address.\n");
         exit(1);
     }
@@ -247,14 +263,15 @@ int main(int argc, char *argv[])
         soft_clock_time, remote_est_time, error, e, simulation_end_time;
 
     real_hardware_clock_gettime(&current_real_time);
-    simulation_end_time = current_real_time + atoi(argv[5]) * MILLION;
+    simulation_end_time = current_real_time + SIMULATION_RUNTIME;
 
     printf("\n====== SIMULATION METADATA     =====\n");
-    printf("Server IP: %s, Port: %d\n", argv[1], atoi(argv[2]));
-    printf("Server Drift: %d PPM, Client Drift: %d PPM\n",
-           atoi(argv[3]), atoi(argv[4]));
+    printf("Server IP: %s, Port: %d\n", SERVER_IP, SERVER_PORT);
+    printf("Server Drift: %ld PPM, Client VHC Drift: %ld PPM\n",
+           SERVER_DRIFT, LOCAL_VHC_DRIFT);
+    printf("Relative Drift Weight: %ld\n", RELATIVE_DRIFT);
     printf("Local Server Time Error: %ld\n", server_clock.error);
-    printf("Simulation runtime: %d seconds\n", atoi(argv[5]));
+    printf("Simulation runtime: %ld seconds\n", SIMULATION_RUNTIME / MILLION);
     printf("====== SIMULATION OUTPUT START =====\n");
     printf("Current Real Time,Local Server Time,Hardware Clock Time,\
 Software Clock Time,Error,Remote Est Time,\n");
