@@ -1,3 +1,8 @@
+#if __STDC_VERSION__ >= 199901L
+#define _XOPEN_SOURCE 600
+#else
+#define _XOPEN_SOURCE 500
+#endif /* __STDC_VERSION__ */
 #include <stdlib.h>
 #include <time.h>
 #include <stdio.h>
@@ -19,6 +24,17 @@
 //#define AMORTIZATION_PERIOD 500000
 #define SERVER_SYNC_ATTEMPTS 50
 
+void usec_to_timeval(struct timeval *tv, microts usec) {
+    tv->tv_sec = usec / MILLION;
+    tv->tv_usec = usec % MILLION;
+}
+
+/* timespec uses nanoseconds */
+void usec_to_timespec(struct timespec *tc, microts usec) {
+    tc->tv_sec = usec / MILLION;
+    tc->tv_nsec = (usec % MILLION) * 1000;
+}
+
 uint32_t next_sequence_number() {
     static uint32_t current_sequence_number = 0;
     return current_sequence_number++;
@@ -38,8 +54,8 @@ int create_client_socket(int *fd) {
 
 int set_socket_timeout(int fd, microts timeout_usec) {
     struct timeval timeout;
-    timeout.tv_sec = timeout_usec / MILLION;
-    timeout.tv_usec = timeout_usec % MILLION;
+    usec_to_timeval(&timeout, timeout_usec);
+
     if (setsockopt(fd, SOL_SOCKET, SO_RCVTIMEO,
                    &timeout, sizeof(timeout)) < 0) {
         printf("Client timeout assignment failed.\n");
@@ -207,7 +223,7 @@ int main(int argc, char *argv[])
     const microts RAPPORT_PERIOD = atol(argv[7]);
     const microts NETWORK_TIMEOUT = atol(argv[8]);
     const microts AMORTIZATION_PERIOD = atol(argv[9]);
-    const microts PRINT_FREQUENCY = atol(argv[10]);
+    const microts PRINT_PERIOD = atol(argv[10]);
 
     vhspec local_hardware_clock = {0};
     local_hardware_clock.drift_rate = LOCAL_VHC_DRIFT;
@@ -280,6 +296,9 @@ int main(int argc, char *argv[])
     printf("Current Real Time,Local Server Time,Hardware Clock Time,\
 Software Clock Time,Error,Remote Est Time,\n");
 
+    struct timespec sleeptime;
+    usec_to_timespec(&sleeptime, PRINT_PERIOD / 2);
+
     /* Simulation begins, exits when time limit reached */
     while (current_real_time < simulation_end_time) {
         e = real_hardware_clock_gettime(&current_real_time)
@@ -297,7 +316,7 @@ Software Clock Time,Error,Remote Est Time,\n");
 /* Current Real Time,Local Server Time,Hardware Clock Time, */
 /* Software Clock Time,Error,Remote Est Time, */
 
-        if (current_real_time - last_print > PRINT_FREQUENCY) {
+        if (current_real_time - last_print > PRINT_PERIOD) {
             printf("%ld,%ld,%ld,%ld,%ld,,\n",
                    current_real_time, local_server_time, local_hardware_clock_time,
                    soft_clock_time, error);
@@ -352,8 +371,8 @@ Software Clock Time,Error,Remote Est Time,\n");
             soft_clock.rapport_vhc = response_local_hardware_time;
 
             real_hardware_clock_gettime(&last_rapport);
-            /* printf("Timestamp received: %ld\tRTT: %ld\tEst ST: %ld\n", */
-            /* response_value, rtt, est_server_time); */
         }
+
+        nanosleep(&sleeptime, NULL);
     }
 }
