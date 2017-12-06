@@ -215,9 +215,9 @@ int main(int argc, char *argv[])
     const int SERVER_PORT = atoi(argv[2]);
 
     /* Weigh server, local VHC drift by relative drift to correct native drift */
-    const microts RELATIVE_DRIFT = atol(argv[5]);
-    const microts SERVER_DRIFT = atol(argv[3]) + RELATIVE_DRIFT;
-    const microts LOCAL_VHC_DRIFT = atol(argv[4]) + RELATIVE_DRIFT;
+    const double RELATIVE_DRIFT = atof(argv[5]);
+    const double SERVER_DRIFT = atof(argv[3]) + RELATIVE_DRIFT;
+    const double LOCAL_VHC_DRIFT = atof(argv[4]) + RELATIVE_DRIFT;
 
     const microts SIMULATION_RUNTIME = atol(argv[6]) * MILLION;
     const microts RAPPORT_PERIOD = atol(argv[7]);
@@ -276,18 +276,20 @@ int main(int argc, char *argv[])
        Both print and rapport happen immediately. */
     microts last_rapport = 0;
     microts last_print = 0;
-
-    microts current_real_time, local_server_time, local_hardware_clock_time,
-        soft_clock_time, remote_est_time, error, e, simulation_end_time;
+    microts current_real_time, simulation_start_time, simulation_end_time;
+    microts local_server_time, local_hardware_clock_time,
+        soft_clock_time, remote_est_time, error, e;
+    double real_time_elapsed;
 
     real_hardware_clock_gettime(&current_real_time);
+    simulation_start_time = current_real_time;
     simulation_end_time = current_real_time + SIMULATION_RUNTIME;
 
     printf("\n====== SIMULATION METADATA     =====\n");
     printf("Server IP: %s, Port: %d\n", SERVER_IP, SERVER_PORT);
-    printf("Server Drift: %ld PPM, Client VHC Drift: %ld PPM\n",
+    printf("Server Drift: %.2f PPM, Client VHC Drift: %.2f PPM\n",
            SERVER_DRIFT - RELATIVE_DRIFT, LOCAL_VHC_DRIFT - RELATIVE_DRIFT);
-    printf("Relative Drift Weight: %ld\n", RELATIVE_DRIFT);
+    printf("Relative Drift Weight: %.2f\n", RELATIVE_DRIFT);
     printf("Local Server Time Error: %ld\n", server_clock.error);
     printf("Rapport Period: %ld\n", RAPPORT_PERIOD);
     printf("Amortization Period: %ld\n", AMORTIZATION_PERIOD);
@@ -295,7 +297,7 @@ int main(int argc, char *argv[])
     printf("Simulation runtime: %ld usec, \n Start: %ld, End: %ld\n",
            SIMULATION_RUNTIME, current_real_time, simulation_end_time);
     printf("====== SIMULATION OUTPUT START =====\n");
-    printf("Current Real Time,Local Server Time,Hardware Clock Time,\
+    printf("Current Real Time,Real Time Elapsed (sec),Local Server Time,Hardware Clock Time,\
 Software Clock Time,Error,Remote Est Time,\n");
 
     struct timespec sleeptime;
@@ -314,13 +316,14 @@ Software Clock Time,Error,Remote Est Time,\n");
             exit(1);
         }
 
+        real_time_elapsed = (double) (current_real_time - simulation_start_time)
+            / (double) MILLION;
         error = soft_clock_time - local_server_time;
-/* Current Real Time,Local Server Time,Hardware Clock Time, */
-/* Software Clock Time,Error,Remote Est Time, */
 
         if (current_real_time - last_print > PRINT_PERIOD) {
-            printf("%ld,%ld,%ld,%ld,%ld,,\n",
-                   current_real_time, local_server_time, local_hardware_clock_time,
+            printf("%ld,%.5f,%ld,%ld,%ld,%ld,,\n",
+                   current_real_time, real_time_elapsed,
+                   local_server_time, local_hardware_clock_time,
                    soft_clock_time, error);
 
             last_print = current_real_time;
@@ -363,9 +366,14 @@ Software Clock Time,Error,Remote Est Time,\n");
                 printf("FATAL: A clock read error occurred during runtime.\n");
                 exit(1);
             }
+
+            real_time_elapsed = (double) (current_real_time - simulation_start_time)
+                / (double) MILLION;
             error = soft_clock_time - local_server_time;
-            printf("%ld,%ld,%ld,%ld,%ld,%ld,\n",
-                   current_real_time, local_server_time, local_hardware_clock_time,
+
+            printf("%ld,%.5f,%ld,%ld,%ld,%ld,%ld,\n",
+                   current_real_time, real_time_elapsed,
+                   local_server_time, local_hardware_clock_time,
                    soft_clock_time, error, est_server_time);
 
             soft_clock.rapport_master = est_server_time;

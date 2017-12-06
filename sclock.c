@@ -56,15 +56,16 @@ int virtual_hardware_clock_gettime(vhspec *v, microts *result) {
     microts elapsed_time = (real_time) - (v->initial_value);
 
     /* compute whole_drift as drift expressed in whole numbers */
-    microts whole_drift = (elapsed_time / MILLION) * (v->drift_rate);
+    double whole_drift = (((microts) elapsed_time / (microts) MILLION))
+        * (v->drift_rate);
 
     /* partial_drift is drift that occurs while a second has not fully elapsed.
        To preserve VHC continuity, we have to account for drift that has occured
        during the partial second that has elapsed. */
     double fraction_of_second = ((double) (elapsed_time % MILLION)) / MILLION;
-    microts partial_drift = llrint(fraction_of_second * v->drift_rate);
+    double partial_drift = fraction_of_second * v->drift_rate;
 
-    *result = elapsed_time + (whole_drift + partial_drift) + v->offset;
+    *result = elapsed_time + llrint((whole_drift + partial_drift)) + v->offset;
     return 0;
 }
 

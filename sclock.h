@@ -41,7 +41,7 @@ typedef struct vhspec {
 
     /* drift_rate is given in parts per million, PPM.
        +1 PPM = +1 microsecond of drift per second (1*10^6 microseconds) */
-    int32_t drift_rate;
+    double drift_rate;
 } vhspec;
 
 /* Specification for a software clock. */
