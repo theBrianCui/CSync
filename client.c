@@ -292,6 +292,8 @@ int main(int argc, char *argv[])
     printf("Rapport Period: %ld\n", RAPPORT_PERIOD);
     printf("Amortization Period: %ld\n", AMORTIZATION_PERIOD);
     printf("Simulation runtime: %ld seconds\n", SIMULATION_RUNTIME / MILLION);
+    printf("Simulation runtime: %ld usec, \n Start: %ld, End: %ld\n",
+           SIMULATION_RUNTIME, current_real_time, simulation_end_time);
     printf("====== SIMULATION OUTPUT START =====\n");
     printf("Current Real Time,Local Server Time,Hardware Clock Time,\
 Software Clock Time,Error,Remote Est Time,\n");
