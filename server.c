@@ -7,13 +7,13 @@
 #include "sclock.h"
 
 int main(int argc, char const *argv[]) {
-    if (argc < 2) {
-        printf("Usage: server [master drift (PPM)]\n");
+    if (argc < 3) {
+        printf("Usage: server [port] [master drift (PPM)]\n");
         exit(1);
     }
 
     vhspec server_clock;
-    server_clock.drift_rate = atoi(argv[1]);
+    server_clock.drift_rate = atoi(argv[2]);
     if (virtual_hardware_clock_init(&server_clock) != 0) {
         printf("FATAL: Failed to initialize server virtual hardware clock.\n");
         exit(1);
@@ -24,7 +24,7 @@ int main(int argc, char const *argv[]) {
     struct sockaddr_in address;
     address.sin_family = AF_INET;
     address.sin_addr.s_addr = INADDR_ANY;
-    address.sin_port = htons(8080);
+    address.sin_port = htons(atoi(argv[1]));
 
     int opt = 1;
     char buffer[MESSAGE_SIZE] = {0};
